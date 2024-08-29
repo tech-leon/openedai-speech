@@ -10,6 +10,7 @@ import sys
 import threading
 import time
 import yaml
+import json
 
 from fastapi.responses import StreamingResponse
 from loguru import logger
@@ -84,13 +85,15 @@ class xtts_wrapper():
                 self.timer.daemon = True
                 self.timer.start()
 
-    def tts(self, text, language, speaker_wav, **hf_generate_kwargs):
+    def tts(self, text, language, audio_path, **hf_generate_kwargs):
         with torch.no_grad():
             self.last_used = time.time()
             tokens = 0
             try:
                 with self.lock:
-                    gpt_cond_latent, speaker_embedding = self.xtts.get_conditioning_latents(audio_path=[speaker_wav]) # not worth caching calls, it's < 0.001s after model is loaded
+                    logger.debug(f"generating [{language}]: {[text]}")
+
+                    gpt_cond_latent, speaker_embedding = self.xtts.get_conditioning_latents(audio_path=audio_path) # not worth caching calls, it's < 0.001s after model is loaded
                     pcm_stream = self.xtts.inference_stream(text, language, gpt_cond_latent, speaker_embedding, **hf_generate_kwargs)
                     self.last_used = time.time()
 
@@ -230,7 +233,15 @@ async def generate_speech(request: GenerateSpeechRequest):
         tts_proc.stdin.write(bytearray(input_text.encode('utf-8')))
         tts_proc.stdin.close()
 
-        ffmpeg_args = build_ffmpeg_args(response_format, input_format="s16le", sample_rate="22050")
+        try:
+            with open(f"{piper_model}.json", 'r') as pvc_f:
+                conf = json.load(pvc_f)
+                sample_rate = str(conf['audio']['sample_rate'])
+
+        except:
+            sample_rate = '22050'
+  
+        ffmpeg_args = build_ffmpeg_args(response_format, input_format="s16le", sample_rate=sample_rate)
 
         # Pipe the output from piper/xtts to the input of ffmpeg
         ffmpeg_args.extend(["-"])
@@ -308,6 +319,21 @@ async def generate_speech(request: GenerateSpeechRequest):
         in_q = queue.Queue() # speech pcm 
         ex_q = queue.Queue() # exceptions
 
+        def get_speaker_samples(samples: str) -> list[str]:
+            if os.path.isfile(samples):
+                audio_path = [samples]
+            elif os.path.isdir(samples):
+                audio_path = [os.path.join(samples, sample) for sample in os.listdir(samples) if os.path.isfile(os.path.join(samples, sample))]
+
+                if len(audio_path) < 1:
+                    logger.error(f"No files found: {samples}")
+                    raise ServiceUnavailableError(f"Invalid path: {samples}")
+            else:
+                logger.error(f"Invalid path: {samples}")
+                raise ServiceUnavailableError(f"Invalid path: {samples}")
+            
+            return audio_path
+
         def exception_check(exq: queue.Queue):
             try:
                 e = exq.get_nowait()
@@ -318,9 +344,13 @@ async def generate_speech(request: GenerateSpeechRequest):
 
         def generator():
             # text -> in_q
+
+            audio_path = get_speaker_samples(speaker)
+            logger.debug(f"{voice} wav samples: {audio_path}")
+
             try:
                 for text in all_text:
-                    for chunk in xtts.tts(text=text, language=language, speaker_wav=speaker, **hf_generate_kwargs):
+                    for chunk in xtts.tts(text=text, language=language, audio_path=audio_path, **hf_generate_kwargs):
                         exception_check(ex_q)
                         in_q.put(chunk)
 

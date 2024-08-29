@@ -26,6 +26,15 @@ jobs:
       - name: Check out code
         uses: actions/checkout@v4
 
+      - name: Free Disk Space Before Build
+        run: |
+          sudo rm -rf /usr/local/.ghcup
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/share/boost
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
         with:
@@ -69,7 +78,7 @@ jobs:
           labels: version=${{ github.run_id }}
           platforms: linux/amd64,linux/arm64
 
-  build-and-push-min-image:
+  build-and-push-image-min:
     runs-on: ubuntu-latest
 
     permissions:
@@ -86,6 +95,15 @@ jobs:
       - name: Check out code
         uses: actions/checkout@v4
 
+      - name: Free Disk Space Before Build
+        run: |
+          sudo rm -rf /usr/local/.ghcup
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/share/boost
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
         with:
@@ -129,7 +147,7 @@ jobs:
           labels: version=${{ github.run_id }}
           platforms: linux/amd64,linux/arm64
 
-  build-and-push-rocm-image:
+  build-and-push-image-rocm:
     runs-on: ubuntu-latest
 
     permissions:
@@ -147,6 +165,15 @@ jobs:
       - name: Check out code
         uses: actions/checkout@v4
 
+      - name: Free Disk Space Before Build
+        run: |
+          sudo rm -rf /usr/local/.ghcup
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/share/boost
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
         with:
@@ -193,4 +220,3 @@ jobs:
           platforms: linux/amd64,linux/arm64
           build-args: |
             USE_ROCM=1
-
